@@ -1,0 +1,153 @@
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 15px;
+  background: white; 
+  min-height: 100vh;
+  color: #333;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: transparent; 
+  border-radius: 15px;
+  padding: 15px;
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+}
+
+h1 {
+  text-align: center;
+  color: #2c3e50;
+  margin: 10px 0;
+  font-size: 1.8em;
+  font-weight: 300;
+}
+
+h3 {
+  margin: 5px 0 10px 0;
+  font-size: 1.2em;
+  color: #2c3e50;
+  border-bottom: 1px solid #3498db;
+  padding-bottom: 5px;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 15px;
+}
+
+.control-panel {
+  background: transparent;
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #ddd; 
+}
+
+.input-group {
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-label {
+  min-width: 120px;
+  font-weight: 500;
+  font-size: 0.9em;
+  color: #34495e;
+}
+
+input[type="number"] {
+  padding: 6px 10px;
+  border: 1px solid #3498db;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 80px;
+}
+
+button {
+  background: #3498db;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.visualization-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.chart-container {
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px;
+  height: 250px;
+  border: 1px solid #ddd; 
+}
+
+.collapsible {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collapsible:after {
+  content: "+";
+  font-weight: bold;
+}
+
+.active:after {
+  content: "-";
+}
+
+.content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.history-container {
+  background: transparent; 
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: none; 
+  margin-bottom: 15px;
+  border: 1px solid #ddd; 
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+table th,
+table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+table thead {
+  background-color: #f5f5f5; 
+  color: #333; 
+}
+
+@media (max-width: 768px) {
+  .visualization-section,
+  .layout-grid {
+    grid-template-columns: 1fr;
+  }
+}

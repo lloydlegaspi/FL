@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Fuzzy Thermal Controller</title>
+    <link rel="stylesheet" href="style.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+
+  </head>
+  <body>
+    <div class="container">
+      <h1>Aircon - Fuzzy Thermal Controller</h1>
+
+      <div class="layout-grid">
+        <div>
+          <div class="control-panel">
+            <h3>Temperature Controls</h3>
+
+            <div class="input-group">
+              <div class="input-label">Target Temp (°F)</div>
+              <input
+                type="number"
+                id="targetTempInput"
+                min="60"
+                max="90"
+                value="72"
+                step="0.5"
+              />
+            </div>
+
+            <div class="input-group">
+              <div class="input-label">Current Temp (°F)</div>
+              <input
+                type="number"
+                id="roomTempInput"
+                min="60"
+                max="90"
+                value="75"
+                step="0.5"
+              />
+            </div>
+
+            <div class="input-group">
+              <button id="addReadingBtn">Add Temperature</button>
+            </div>
+          </div>
+
+          <div class="history-container">
+            <h3 class="collapsible">Temperature History</h3>
+            <div class="content">
+              <table id="historyTable">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Target</th>
+                    <th>Room</th>
+                    <th>Error</th>
+                    <th>Error Dot</th> 
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="visualization-section">
+            <div class="chart-container">
+              <div
+                id="errorMembershipPlot"
+                style="width: 100%; height: 100%"
+              ></div>
+            </div>
+            <div class="chart-container">
+              <div
+                id="errorDotMembershipPlot"
+                style="width: 100%; height: 100%"
+              ></div>
+            </div>
+          </div>
+          <div class="chart-container" style="height: 280px">
+            <div id="outputPlot" style="width: 100%; height: 100%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      class FuzzyThermalController {
+        constructor() {
+          this.errorRange = this.linspace(-10, 10, 100);
+          this.errorDotRange = this.linspace(-15, 15, 100);
+          this.coolingRange = this.linspace(0, 1, 100);
+          this.setupMembershipFunctions();
+        }
+
+        linspace(start, stop, num) {
+          const step = (stop - start) / (num - 1);
+          return Array.from({ length: num }, (_, i) => start + step * i);
+        }
+
+        setupMembershipFunctions() {
+          // Error membership functions
+          this.errorNegative = this.createMembershipFunction(this.errorRange, [
+            [-10, 1],
+            [-4, 1],
+            [-2, 1],
+            [0, 0],
+            [10, 0],
+          ]);
+          this.errorZero = this.createMembershipFunction(this.errorRange, [
+            [-10, 0],
+            [-2, 0],
+            [0, 1],
+            [2, 0],
+            [10, 0],
+          ]);
+          this.errorPositive = this.createMembershipFunction(this.errorRange, [
+            [-10, 0],
+            [0, 0],
+            [2, 1],
+            [4, 1],
+            [10, 1],
+          ]);
+
+          // Error dot membership functions
+          this.errorDotNegative = this.createMembershipFunction(
+            this.errorDotRange,
+            [
+              [-15, 1],
+              [-10, 1],
+              [-5, 1],
+              [0, 0],
+              [15, 0],
+            ]
+          );
+          this.errorDotZero = this.createMembershipFunction(
+            this.errorDotRange,
+            [
+              [-15, 0],
+              [-5, 0],
+              [0, 1],
+              [5, 0],
+              [15, 0],
+            ]
+          );
+          this.errorDotPositive = this.createMembershipFunction(
+            this.errorDotRange,
+            [
+              [-15, 0],
+              [0, 0],
+              [5, 1],
+              [10, 1],
+              [15, 1],
+            ]
+          );
+
+          // Output membership functions
+          this.coolingOff = this.createMembershipFunction(this.coolingRange, [
+            [0, 1],
+            [0.3, 1],
+            [0.5, 0],
+            [1, 0],
+          ]);
+          this.coolingOn = this.createMembershipFunction(this.coolingRange, [
+            [0, 0],
+            [0.5, 0],
+            [0.7, 1],
+            [1, 1],
+          ]);
+        }
+
+        createMembershipFunction(xRange, points) {
+          const result = new Array(xRange.length).fill(0);
+
+          for (let i = 0; i < xRange.length; i++) {
+            const x = xRange[i];
+
+            // Find the appropriate segment
+            for (let j = 0; j < points.length - 1; j++) {
+              const [x1, y1] = points[j];
+              const [x2, y2] = points[j + 1];
+
+              if (x >= x1 && x <= x2) {
+                // Linear interpolation
+                if (x2 === x1) {
+                  result[i] = y1;
+                } else {
+                  result[i] = y1 + ((y2 - y1) * (x - x1)) / (x2 - x1);
+                }
+                break;
+              }
+            }
+          }
+
+          return result;
+        }
+
+        interpolate(x, xRange, yRange) {
+          if (x <= xRange[0]) return yRange[0];
+          if (x >= xRange[xRange.length - 1]) return yRange[yRange.length - 1];
+
+          for (let i = 0; i < xRange.length - 1; i++) {
+            if (x >= xRange[i] && x <= xRange[i + 1]) {
+              const t = (x - xRange[i]) / (xRange[i + 1] - xRange[i]);
+              return yRange[i] + t * (yRange[i + 1] - yRange[i]);
+            }
+          }
+          return 0;
+        }
+
+        fuzzify(error, errorDot) {
+          return {
+            error: {
+              negative: this.interpolate(
+                error,
+                this.errorRange,
+                this.errorNegative
+              ),
+              zero: this.interpolate(error, this.errorRange, this.errorZero),
+              positive: this.interpolate(
+                error,
+                this.errorRange,
+                this.errorPositive
+              ),
+            },
+            errorDot: {
+              negative: this.interpolate(
+                errorDot,
+                this.errorDotRange,
+                this.errorDotNegative
+              ),
+              zero: this.interpolate(
+                errorDot,
+                this.errorDotRange,
+                this.errorDotZero
+              ),
+              positive: this.interpolate(
+                errorDot,
+                this.errorDotRange,
+                this.errorDotPositive
+              ),
+            },
+          };
+        }
+
+        applyRules(memberships) {
+          const rule1Strength = memberships.error.negative;
+          const rule2Strength = memberships.error.zero;
+          const rule3Strength = memberships.error.positive;
+          const rule4Strength = memberships.errorDot.positive;
+          const rule5Strength = memberships.errorDot.negative;
+
+          const coolingOnStrength = Math.max(
+            rule1Strength,
+            rule4Strength * 0.5
+          );
+          const coolingOffStrength = Math.max(
+            rule2Strength,
+            rule3Strength,
+            rule5Strength * 0.5
+          );
+
+          return [coolingOnStrength, coolingOffStrength];
+        }
+
+        defuzzify(coolingOnStrength, coolingOffStrength) {
+          const coolingOnSet = this.coolingOn.map((val) =>
+            Math.min(coolingOnStrength, val)
+          );
+          const coolingOffSet = this.coolingOff.map((val) =>
+            Math.min(coolingOffStrength, val)
+          );
+
+          const combinedOutput = coolingOnSet.map((val, i) =>
+            Math.max(val, coolingOffSet[i])
+          );
+
+          const sum = combinedOutput.reduce((a, b) => a + b, 0);
+          if (sum === 0) return 0.0;
+
+          const numerator = combinedOutput.reduce(
+            (acc, val, i) => acc + this.coolingRange[i] * val,
+            0
+          );
+          return numerator / sum;
+        }
+
+        computeCooling(error, errorDot) {
+          const memberships = this.fuzzify(error, errorDot);
+          const [coolingOnStrength, coolingOffStrength] =
+            this.applyRules(memberships);
+          const coolingOutput = this.defuzzify(
+            coolingOnStrength,
+            coolingOffStrength
+          );
+
+          return {
+            coolingOutput,
+            memberships,
+            ruleStrengths: [coolingOnStrength, coolingOffStrength],
+          };
+        }
+      }
+
+      // Temperature history management
+      class TemperatureHistory {
+        constructor() {
+          this.readings = [];
+        }
+
+        addReading(targetTemp, roomTemp) {
+          const timestamp = new Date();
+          const error = targetTemp - roomTemp;
+          let errorDot = 0; // Changed from errorRate
+
+          // Calculate error dot as previous_error - current_error
+          if (this.readings.length > 0) {
+            const prevReading = this.readings[0]; // Most recent reading (we insert at beginning)
+            errorDot = prevReading.error - error; // Changed variable name
+          }
+
+          // Add the new reading at the beginning of the array (newest first)
+          this.readings.unshift({
+            timestamp,
+            targetTemp,
+            roomTemp,
+            error,
+            errorDot, // Changed from errorRate
+          });
+
+          return { error, errorDot }; // Changed from errorRate
+        }
+
+        getLatestError() {
+          if (this.readings.length === 0) return { error: 0, errorDot: 0 }; // Changed from errorRate
+          return {
+            error: this.readings[0].error,
+            errorDot: this.readings[0].errorDot, // Changed from errorRate
+          };
+        }
+
+        getReadings() {
+          return this.readings;
+        }
+      }
+
+      const controller = new FuzzyThermalController();
+      const history = new TemperatureHistory();
+
+      // Initialize UI event listeners
+      function initializeUI() {
+        const addReadingBtn = document.getElementById("addReadingBtn");
+        const collapsible = document.querySelector(".collapsible");
+
+        addReadingBtn.addEventListener("click", function () {
+          const targetTemp = parseFloat(
+            document.getElementById("targetTempInput").value
+          );
+          const roomTemp = parseFloat(
+            document.getElementById("roomTempInput").value
+          );
+
+          if (isNaN(targetTemp) || isNaN(roomTemp)) {
+            alert("Please enter valid temperature values");
+            return;
+          }
+
+          // Add reading to history and update UI
+          const { error, errorDot } = history.addReading(targetTemp, roomTemp); // Changed from errorRate
+          updateHistoryTable();
+          updateController(error, errorDot); // Changed from errorRate
+        });
+
+        // Setup collapsible functionality
+        collapsible.addEventListener("click", function () {
+          this.classList.toggle("active");
+          const content = this.nextElementSibling;
+          if (content.style.maxHeight) {
+            content.style.maxHeight = null;
+          } else {
+            content.style.maxHeight = content.scrollHeight + "px";
+          }
+        });
+      }
+
+      function formatDateTime(date) {
+        return date.toLocaleString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      }
+
+      function updateHistoryTable() {
+        const tableBody = document.getElementById("historyTableBody");
+        const readings = history.getReadings();
+        const content = document.querySelector(".content");
+
+        tableBody.innerHTML = "";
+
+        readings.forEach((reading) => {
+          const row = document.createElement("tr");
+
+          row.innerHTML = `
+            <td>${formatDateTime(reading.timestamp)}</td>
+            <td>${reading.targetTemp.toFixed(1)}</td>
+            <td>${reading.roomTemp.toFixed(1)}</td>
+            <td>${reading.error.toFixed(1)}</td>
+            <td>${reading.errorDot.toFixed(1)}</td> <!-- Changed from errorRate -->
+          `;
+
+          tableBody.appendChild(row);
+        });
+
+        // Update collapsible content height if it's open
+        if (content.style.maxHeight) {
+          content.style.maxHeight = content.scrollHeight + "px";
+        }
+      }
+
+      function updateController(error, errorDot) {
+        const result = controller.computeCooling(error, errorDot);
+
+        // Update visualizations
+        updateErrorMembershipPlot(error, result.memberships);
+        updateErrorDotMembershipPlot(errorDot, result.memberships);
+        updateOutputPlot(result.ruleStrengths, result.coolingOutput);
+      }
+
+      function updateErrorMembershipPlot(error, memberships) {
+        const traces = [
+          {
+            x: controller.errorRange,
+            y: controller.errorNegative,
+            type: "scatter",
+            mode: "lines",
+            name: "Negative (Too Hot)",
+            line: { color: "#e74c3c", width: 3 },
+          },
+          {
+            x: controller.errorRange,
+            y: controller.errorZero,
+            type: "scatter",
+            mode: "lines",
+            name: "Zero (Perfect)",
+            line: { color: "#27ae60", width: 3 },
+          },
+          {
+            x: controller.errorRange,
+            y: controller.errorPositive,
+            type: "scatter",
+            mode: "lines",
+            name: "Positive (Too Cold)",
+            line: { color: "#3498db", width: 3 },
+          },
+          {
+            x: [error, error],
+            y: [0, 1],
+            type: "scatter",
+            mode: "lines",
+            name: "Current Error",
+            line: { color: "#f39c12", width: 4, dash: "dash" },
+          },
+        ];
+
+        const layout = {
+          title: "Error Membership Functions",
+          xaxis: {
+            title: {
+              text: "Temperature Error (°F)",
+              standoff: 60,
+            },
+          },
+          yaxis: { title: "Membership Degree", range: [0, 1.1] },
+          showlegend: true,
+          legend: { orientation: "h", y: -0.2 },
+          margin: { l: 50, r: 20, t: 50, b: 100 },
+          plot_bgcolor: "rgba(0,0,0,0)",
+          paper_bgcolor: "rgba(0,0,0,0)",
+        };
+
+        Plotly.newPlot("errorMembershipPlot", traces, layout, {
+          responsive: true,
+        });
+      }
+
+      function updateErrorDotMembershipPlot(errorDot, memberships) {
+        const traces = [
+          {
+            x: controller.errorDotRange,
+            y: controller.errorDotNegative,
+            type: "scatter",
+            mode: "lines",
+            name: "Getting Colder",
+            line: { color: "#3498db", width: 3 },
+          },
+          {
+            x: controller.errorDotRange,
+            y: controller.errorDotZero,
+            type: "scatter",
+            mode: "lines",
+            name: "Stable",
+            line: { color: "#27ae60", width: 3 },
+          },
+          {
+            x: controller.errorDotRange,
+            y: controller.errorDotPositive,
+            type: "scatter",
+            mode: "lines",
+            name: "Geting Hotter",
+            line: { color: "#e74c3c", width: 3 },
+          },
+          {
+            x: [errorDot, errorDot],
+            y: [0, 1],
+            type: "scatter",
+            mode: "lines",
+            name: "Current Rate",
+            line: { color: "#f39c12", width: 4, dash: "dash" },
+          },
+        ];
+
+        const layout = {
+          title: "Error Dot Membership Functions", // Changed from "Error Rate Membership Functions"
+          xaxis: {
+            title: {
+              text: "Temperature Change Rate (°F/min)", // Could also change to "Error Dot (°F/min)" for full consistency
+              standoff: 60,
+            },
+          },
+          yaxis: { title: "Membership Degree", range: [0, 1.1] },
+          showlegend: true,
+          legend: { orientation: "h", y: -0.2 },
+          margin: { l: 50, r: 20, t: 50, b: 100 },
+          plot_bgcolor: "rgba(0,0,0,0)",
+          paper_bgcolor: "rgba(0,0,0,0)",
+        };
+
+        Plotly.newPlot("errorDotMembershipPlot", traces, layout, {
+          responsive: true,
+        });
+      }
+
+      function updateOutputPlot(ruleStrengths, coolingOutput) {
+        const [coolingOnStrength, coolingOffStrength] = ruleStrengths;
+
+        const coolingOnSet = controller.coolingOn.map((val) =>
+          Math.min(coolingOnStrength, val)
+        );
+        const coolingOffSet = controller.coolingOff.map((val) =>
+          Math.min(coolingOffStrength, val)
+        );
+        const combinedOutput = coolingOnSet.map((val, i) =>
+          Math.max(val, coolingOffSet[i])
+        );
+
+        const traces = [
+          {
+            x: controller.coolingRange,
+            y: controller.coolingOff,
+            type: "scatter",
+            mode: "lines",
+            name: "Cooling OFF",
+            line: { color: "#3498db", width: 2 },
+          },
+          {
+            x: controller.coolingRange,
+            y: controller.coolingOn,
+            type: "scatter",
+            mode: "lines",
+            name: "Cooling ON",
+            line: { color: "#e74c3c", width: 2 },
+          },
+          {
+            x: controller.coolingRange,
+            y: combinedOutput,
+            type: "scatter",
+            mode: "lines",
+            fill: "tozeroy",
+            name: "Combined Output",
+            line: { color: "#f39c12", width: 3 },
+            fillcolor: "rgba(243, 156, 18, 0.3)",
+          },
+          {
+            x: [coolingOutput, coolingOutput],
+            y: [0, Math.max(...combinedOutput)],
+            type: "scatter",
+            mode: "lines",
+            name: "Defuzzified Output",
+            line: { color: "#8e44ad", width: 4, dash: "dash" },
+          },
+        ];
+
+        const layout = {
+          title: "Fuzzy Output and Defuzzification",
+          xaxis: {
+            title: {
+              text: "Cooling Output",
+              standoff: 60,
+            },
+          },
+          yaxis: { title: "Membership Degree", range: [0, 1.1] },
+          showlegend: true,
+          legend: { orientation: "h", y: -0.2 },
+          margin: { l: 50, r: 20, t: 50, b: 100 },
+          plot_bgcolor: "rgba(0,0,0,0)",
+          paper_bgcolor: "rgba(0,0,0,0)",
+        };
+
+        Plotly.newPlot("outputPlot", traces, layout, { responsive: true });
+      }
+
+      // Initialize the application
+      window.onload = function () {
+        initializeUI();
+
+        // Add an initial reading to show something in the UI
+        const targetTemp = parseFloat(
+          document.getElementById("targetTempInput").value
+        );
+        const roomTemp = parseFloat(
+          document.getElementById("roomTempInput").value
+        );
+
+        const { error, errorDot } = history.addReading(targetTemp, roomTemp); // Changed from errorRate
+        updateHistoryTable();
+        updateController(error, errorDot); // Changed from errorRate
+
+        // Open the collapsible for initial view
+        document.querySelector(".collapsible").click();
+      };
+    </script>
+  </body>
+</html>
