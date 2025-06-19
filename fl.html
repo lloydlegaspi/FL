@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Simple Fuzzy Thermal Controller</title>
+    <title>Aircon - Fuzzy Logic System</h1></title>
     <link rel="stylesheet" href="style.css"/>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
 
   </head>
   <body>
     <div class="container">
-      <h1>Aircon - Fuzzy Thermal Controller</h1>
+      <h1>Aircon - Fuzzy Logic System</h1>
 
       <div class="layout-grid">
         <div>
@@ -307,7 +307,7 @@
         }
       }
 
-      // Temperature history management
+      // Temperature history 
       class TemperatureHistory {
         constructor() {
           this.readings = [];
@@ -316,31 +316,30 @@
         addReading(targetTemp, roomTemp) {
           const timestamp = new Date();
           const error = targetTemp - roomTemp;
-          let errorDot = 0; // Changed from errorRate
+          let errorDot = 0; 
 
           // Calculate error dot as previous_error - current_error
           if (this.readings.length > 0) {
-            const prevReading = this.readings[0]; // Most recent reading (we insert at beginning)
-            errorDot = prevReading.error - error; // Changed variable name
+            const prevReading = this.readings[0]; 
+            errorDot = prevReading.error - error; 
           }
 
-          // Add the new reading at the beginning of the array (newest first)
           this.readings.unshift({
             timestamp,
             targetTemp,
             roomTemp,
             error,
-            errorDot, // Changed from errorRate
+            errorDot,
           });
 
-          return { error, errorDot }; // Changed from errorRate
+          return { error, errorDot };
         }
 
         getLatestError() {
-          if (this.readings.length === 0) return { error: 0, errorDot: 0 }; // Changed from errorRate
+          if (this.readings.length === 0) return { error: 0, errorDot: 0 }; 
           return {
             error: this.readings[0].error,
-            errorDot: this.readings[0].errorDot, // Changed from errorRate
+            errorDot: this.readings[0].errorDot, 
           };
         }
 
@@ -352,7 +351,6 @@
       const controller = new FuzzyThermalController();
       const history = new TemperatureHistory();
 
-      // Initialize UI event listeners
       function initializeUI() {
         const addReadingBtn = document.getElementById("addReadingBtn");
         const collapsible = document.querySelector(".collapsible");
@@ -370,13 +368,11 @@
             return;
           }
 
-          // Add reading to history and update UI
-          const { error, errorDot } = history.addReading(targetTemp, roomTemp); // Changed from errorRate
+          const { error, errorDot } = history.addReading(targetTemp, roomTemp);
           updateHistoryTable();
-          updateController(error, errorDot); // Changed from errorRate
+          updateController(error, errorDot);
         });
 
-        // Setup collapsible functionality
         collapsible.addEventListener("click", function () {
           this.classList.toggle("active");
           const content = this.nextElementSibling;
@@ -411,13 +407,12 @@
             <td>${reading.targetTemp.toFixed(1)}</td>
             <td>${reading.roomTemp.toFixed(1)}</td>
             <td>${reading.error.toFixed(1)}</td>
-            <td>${reading.errorDot.toFixed(1)}</td> <!-- Changed from errorRate -->
+            <td>${reading.errorDot.toFixed(1)}</td>
           `;
 
           tableBody.appendChild(row);
         });
 
-        // Update collapsible content height if it's open
         if (content.style.maxHeight) {
           content.style.maxHeight = content.scrollHeight + "px";
         }
@@ -426,7 +421,6 @@
       function updateController(error, errorDot) {
         const result = controller.computeCooling(error, errorDot);
 
-        // Update visualizations
         updateErrorMembershipPlot(error, result.memberships);
         updateErrorDotMembershipPlot(errorDot, result.memberships);
         updateOutputPlot(result.ruleStrengths, result.coolingOutput);
@@ -526,10 +520,10 @@
         ];
 
         const layout = {
-          title: "Error Dot Membership Functions", // Changed from "Error Rate Membership Functions"
+          title: "Error Dot Membership Functions",
           xaxis: {
             title: {
-              text: "Temperature Change Rate (°F/min)", // Could also change to "Error Dot (°F/min)" for full consistency
+              text: "Temperature Change Rate (°F/min)", 
               standoff: 60,
             },
           },
@@ -615,11 +609,9 @@
         Plotly.newPlot("outputPlot", traces, layout, { responsive: true });
       }
 
-      // Initialize the application
       window.onload = function () {
         initializeUI();
 
-        // Add an initial reading to show something in the UI
         const targetTemp = parseFloat(
           document.getElementById("targetTempInput").value
         );
@@ -627,11 +619,10 @@
           document.getElementById("roomTempInput").value
         );
 
-        const { error, errorDot } = history.addReading(targetTemp, roomTemp); // Changed from errorRate
+        const { error, errorDot } = history.addReading(targetTemp, roomTemp);
         updateHistoryTable();
-        updateController(error, errorDot); // Changed from errorRate
+        updateController(error, errorDot); 
 
-        // Open the collapsible for initial view
         document.querySelector(".collapsible").click();
       };
     </script>
